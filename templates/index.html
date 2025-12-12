@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Writer Pro - Text Summarizer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1000px; margin: 0 auto; padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh; color: #333;
+        }
+        .container {
+            background: #fff; border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            padding: 30px; margin-top: 20px;
+        }
+        h1 { text-align: center; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #555; margin-bottom: 20px; }
+        textarea {
+            width: 100%; height: 220px; padding: 15px;
+            border-radius: 10px; border: 2px solid #e1e8ed;
+            font-size: 15px; resize: vertical;
+        }
+        .controls { display: flex; gap: 20px; align-items: center; margin: 15px 0; flex-wrap: wrap; }
+        .slider-container { display: flex; align-items: center; gap: 10px; }
+        input[type="range"] {
+            width: 200px; height: 6px; border-radius: 4px;
+            background: #ddd; outline: none; appearance: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none; height: 18px; width: 18px;
+            border-radius: 50%; background: #007bff; cursor: pointer;
+        }
+        button {
+            background: #007bff; color: #fff;
+            padding: 10px 22px; border-radius: 8px;
+            border: none; cursor: pointer; font-weight: 600;
+        }
+        button:hover { background: #0056b3; }
+        .result {
+            margin-top: 25px; padding: 20px;
+            background: #f8f9fa; border-radius: 12px;
+            border-left: 4px solid #007bff;
+        }
+        .metrics { display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px; font-size: 14px; }
+        .metric { background: #fff; padding: 8px 12px; border-radius: 8px; border: 1px solid #ddd; }
+        #history { margin-top: 30px; }
+        .history-item {
+            background: #f1f3f5; padding: 12px; margin: 8px 0;
+            border-radius: 10px; border-left: 4px solid #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 AI Writer Pro</h1>
+        <p class="subtitle">Summarize long text with adjustable length and saved history</p>
+
+        <textarea id="article" placeholder="Paste your article or text here..."></textarea>
+
+        <div class="controls">
+            <div class="slider-container">
+                <label>Summary Length:</label>
+                <input type="range" id="length" min="30" max="130" value="80">
+                <span id="length-display">80 words</span>
+            </div>
+            <button onclick="summarize()">Generate Summary</button>
+        </div>
+
+        <div id="result" class="result" style="display:none;">
+            <h3>Summary</h3>
+            <p id="summary"></p>
+            <div class="metrics">
+                <div class="metric">Original: <span id="orig_count">0</span> words</div>
+                <div class="metric">Summary: <span id="sum_count">0</span> words</div>
+                <div class="metric">Readability: <span id="readability">0</span></div>
+                <div class="metric">Compression: <span id="compression">0%</span></div>
+            </div>
+            <button onclick="saveToHistory()" style="margin-top:10px;">Save to history</button>
+        </div>
+
+        <div id="history" style="display:none;">
+            <h3>Summary history (<span id="history-count">0</span>)</h3>
+            <div id="history-list"></div>
+        </div>
+    </div>
+
+    <script>
+        // initialize
+        loadHistory();
+        updateLengthDisplay();
+        document.getElementById('length').addEventListener('input', updateLengthDisplay);
+
+        function updateLengthDisplay() {
+            const len = document.getElementById('length').value;
+            document.getElementById('length-display').textContent = len + ' words';
+        }
+
+        async function summarize() {
+            const text = document.getElementById('article').value;
+            if (!text.trim()) {
+                alert('Please enter text to summarize');
+                return;
+            }
+            const len = parseInt(document.getElementById('length').value, 10);
+
+            const btn = document.querySelector('button[onclick="summarize()"]');
+            btn.textContent = 'Generating...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/summarize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: text,
+                        max_length: len,
+                        min_length: Math.max(10, Math.round(len * 0.3))
+                    })
+                });
+                const data = await response.json();
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+
+                document.getElementById('summary').textContent = data.summary;
+                document.getElementById('orig_count').textContent = data.word_count_original;
+                document.getElementById('sum_count').textContent = data.word_count_summary;
+                document.getElementById('readability').textContent = data.readability;
+
+                const orig = data.word_count_original;
+                const summ = data.word_count_summary;
+                const compression = orig > 0 ? Math.round((1 - summ / orig) * 100) : 0;
+                document.getElementById('compression').textContent = compression + '%';
+
+                document.getElementById('result').style.display = 'block';
+            } finally {
+                btn.textContent = 'Generate Summary';
+                btn.disabled = false;
+            }
+        }
+
+        function saveToHistory() {
+            const summary = document.getElementById('summary').textContent;
+            if (!summary.trim()) return;
+
+            const hist = JSON.parse(localStorage.getItem('summaryHistory') || '[]');
+            hist.unshift({
+                timestamp: new Date().toLocaleString(),
+                summary: summary,
+                originalWords: document.getElementById('orig_count').textContent,
+                summaryWords: document.getElementById('sum_count').textContent,
+                readability: document.getElementById('readability').textContent
+            });
+            if (hist.length > 10) hist.length = 10;
+            localStorage.setItem('summaryHistory', JSON.stringify(hist));
+            loadHistory();
+        }
+
+        function loadHistory() {
+            const hist = JSON.parse(localStorage.getItem('summaryHistory') || '[]');
+            const list = document.getElementById('history-list');
+            const box = document.getElementById('history');
+            const count = document.getElementById('history-count');
+            list.innerHTML = '';
+            count.textContent = hist.length;
+            hist.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `<strong>${item.timestamp}</strong><br>${item.summary}<br>
+                    <small>Original: ${item.originalWords} | Summary: ${item.summaryWords} | ${item.readability}</small>`;
+                list.appendChild(div);
+            });
+            box.style.display = hist.length ? 'block' : 'none';
+        }
+    </script>
+</body>
+</html>
