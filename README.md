@@ -1,3 +1,31 @@
-AI Writer with Text Summarization
+# AI Writer & Text Summarizer 📝🤖
 
-This project is an AI-powered web application that generates concise summaries from long articles using a BART model from Hugging Face Transformers. The Flask backend exposes a /summarize endpoint, while a simple HTML/JavaScript frontend lets users paste text, choose summary length, and view the result along with word counts and Flesch Reading Ease readability score. The project was developed as part of an AI/ML internship, following the “AI Writer with Text Summarization” brief: build a text input interface, process long articles, run a transformer-based summarization model, add length/readability metrics, and provide sample outputs for evaluation.
+An AI-powered web application that generates concise summaries from long articles using modern NLP models. Built with Flask and Hugging Face Transformers.
+
+---
+
+## 🚀 Features
+- Summarizes long text into short, meaningful content
+- Adjustable summary length
+- Clean web interface
+- Built using Transformer-based NLP models
+- Lightweight and easy to run locally
+
+---
+
+## 🛠 Tech Stack
+- Python
+- Flask
+- Hugging Face Transformers
+- HTML, CSS
+- PyTorch
+- dotenv
+
+---
+
+## 📦 Installation (Local Setup)
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/harishparimal-droid/ai-writer-summarizer.git
+cd ai-writer-summarizer
