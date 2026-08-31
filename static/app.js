@@ -1,7 +1,16 @@
 const MODE_CLASSES = {
-  active: "border-teal-400/70 bg-teal-400/10 text-teal-200",
-  idle: "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200",
+  active: "border-teal-400/70 bg-teal-400/10 text-teal-100",
+  idle: "border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-600 hover:text-zinc-100",
 };
+
+const MODE_LABELS = {
+  tldr: "TL;DR",
+  standard: "Standard",
+  detailed: "In-Depth",
+};
+
+const MAX_INPUT_CHARS = 12000;
+const REQUEST_TIMEOUT_MS = 130000;
 
 const sourceText = document.getElementById("source-text");
 const charCount = document.getElementById("char-count");
@@ -32,7 +41,7 @@ function updateCounters() {
   const value = sourceText.value;
   const chars = value.length;
   const words = countWords(value);
-  charCount.textContent = `${chars.toLocaleString()} character${chars === 1 ? "" : "s"}`;
+  charCount.textContent = `${chars.toLocaleString()} / ${MAX_INPUT_CHARS.toLocaleString()} characters`;
   wordCount.textContent = `${words.toLocaleString()} word${words === 1 ? "" : "s"}`;
   autoGrow();
 }
@@ -46,7 +55,7 @@ function setMode(mode) {
   selectedMode = mode;
   modeChips.forEach((chip) => {
     const isActive = chip.dataset.mode === mode;
-    chip.className = `mode-chip rounded-full border px-4 py-2 text-sm font-medium transition ${
+    chip.className = `mode-chip rounded-xl border px-4 py-3 text-left transition ${
       isActive ? MODE_CLASSES.active : MODE_CLASSES.idle
     }`;
     chip.setAttribute("aria-pressed", String(isActive));
@@ -94,18 +103,48 @@ async function refreshHealth() {
   }
 }
 
+function handleApiError(status, data) {
+  const message = data.error || "Failed to summarize.";
+
+  if (status === 400) {
+    showAlert(message);
+    return;
+  }
+  if (status === 401) {
+    showAlert(message);
+    setStatus("error", "Invalid token");
+    return;
+  }
+  if (status === 500 && /HF_TOKEN/i.test(message)) {
+    showAlert(message);
+    setStatus("error", "Missing HF_TOKEN");
+    return;
+  }
+  if (status === 503) {
+    showAlert(message);
+    setStatus("warning", "Model warming up");
+    return;
+  }
+  if (status === 502) {
+    showAlert(message);
+    setStatus("warning", "HF unreachable");
+    return;
+  }
+  showAlert(message);
+}
+
 async function generateSummary() {
   hideAlert();
   const text = sourceText.value.trim();
   if (!text) {
-    showAlert("Paste some text first. Empty input cannot be summarized.");
+    showAlert("Please enter text to summarize.");
     return;
   }
 
   setLoading(true);
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 95000);
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     const response = await fetch("/api/summarize", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -122,30 +161,21 @@ async function generateSummary() {
     }
 
     if (!response.ok) {
-      if (response.status === 503) {
-        showAlert(data.error || "The Hugging Face model is warming up. Wait a few seconds and try again.");
-        setStatus("warning", "Model warming up");
-        return;
-      }
-      if (response.status === 500 && /HF_TOKEN/i.test(data.error || "")) {
-        showAlert(data.error);
-        setStatus("error", "Missing HF_TOKEN");
-        return;
-      }
-      showAlert(data.error || "Summarization failed. Check your connection and try again.");
+      handleApiError(response.status, data);
       return;
     }
 
+    const modeLabel = MODE_LABELS[data.mode] || data.mode || MODE_LABELS[selectedMode];
     summaryText.textContent = data.summary;
-    statsBadge.textContent = `${data.reduction_pct}% shorter • ${data.original_words} → ${data.summary_words} words`;
+    statsBadge.textContent = `${modeLabel} · ${data.reduction_pct}% shorter · ${data.original_words} → ${data.summary_words} words`;
     outputCard.classList.remove("hidden");
     copyBtn.textContent = "Copy to Clipboard";
     setStatus("ready", "Ready");
   } catch (error) {
     if (error.name === "AbortError") {
-      showAlert("The request timed out waiting for Hugging Face. Please retry.");
+      showAlert("The request timed out waiting for Hugging Face. Please retry in 10 seconds.");
     } else {
-      showAlert("Network error. Confirm the server is running and try again.");
+      showAlert("Could not reach Hugging Face. Please check your internet connection.");
     }
   } finally {
     setLoading(false);
